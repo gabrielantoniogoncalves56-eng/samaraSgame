@@ -1,0 +1,1 @@
+export function createTimer(seconds,{onTick,onEnd}={}){let remaining=seconds;let id=null;const tick=()=>{onTick?.(remaining);if(remaining<=0){clearInterval(id);onEnd?.();return}remaining--};tick();id=setInterval(tick,1000);return{stop(){clearInterval(id)},getRemaining(){return remaining}}}

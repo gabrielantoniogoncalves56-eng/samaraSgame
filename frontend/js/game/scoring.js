@@ -1,0 +1,1 @@
+export function calculateScore({correct,responseMs,questionTimeMs,streak}){if(!correct)return 0;const safe=Math.max(0,Math.min(responseMs,questionTimeMs));const speed=Math.round(1500*(1-safe/questionTimeMs));const streakBonus=Math.max(0,streak-1)*100;return Math.max(0,1000+speed+streakBonus)}

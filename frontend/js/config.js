@@ -1,0 +1,1 @@
+export const CONFIG={API_MODE:'mock',API_BASE_URL:'',POLLING_INTERVAL:1800,DEBUG:true};

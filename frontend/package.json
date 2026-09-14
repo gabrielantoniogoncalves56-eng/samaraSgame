@@ -1,0 +1,7 @@
+{
+  "name": "geobattle-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {"test": "node tests/scoring.test.js && node tests/questions.test.js", "serve": "python -m http.server 5500"}
+}

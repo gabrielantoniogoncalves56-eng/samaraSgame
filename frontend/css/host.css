@@ -1,0 +1,1 @@
+.host-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.host-badge{padding:7px 10px;border-radius:999px;background:rgba(94,234,212,.1);color:var(--accent);font-weight:700}.stat{padding:20px}.stat strong{display:block;font-family:'Space Grotesk';font-size:2rem;margin-top:6px}.host-controls{display:flex;gap:10px;flex-wrap:wrap}
