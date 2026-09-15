@@ -1,6 +1,99 @@
-import {API} from '../api/api.js';import {router} from '../core/router.js';import {appState} from '../core/state.js';import {storage} from '../core/storage.js';import {toast} from '../ui/toast.js';
-let poll=null;
-function renderPlayers(room){return room.players.map(p=>`<div class="player"><span>🧭 ${p.name}${p.isHost?' 👑':''}</span>${room.hostId===appState.get().session.playerId&&!p.isHost?`<button class="btn ghost" data-remove="${p.playerId}" style="padding:7px 10px">Remover</button>`:''}</div>`).join('')}
-export function lobbyPage(){const s=appState.get();const r=s.room;return `<div class="shell page"><header class="topbar"><div class="brand">GEO<span>BATTLE</span></div><span class="host-badge">${s.session?.isHost?'👑 ANFITRIÃO':'JOGADOR'}</span></header><div class="grid two"><section class="card pad code-box center"><div class="eyebrow">CÓDIGO DA SALA</div><div class="room-code">${r.roomCode}</div><div class="actions" style="justify-content:center"><button class="btn secondary" id="copy">COPIAR CÓDIGO</button><button class="btn ghost" id="share">COMPARTILHAR</button></div></section><section class="card pad"><div class="host-toolbar"><div><div class="eyebrow">SALA</div><h2 style="margin:7px 0">${r.roomCode}</h2></div><div class="stat"><span class="muted">Jogadores</span><strong id="count">${r.players.length}</strong></div></div><div class="player-grid" id="players">${renderPlayers(r)}</div>${s.session.isHost?`<div class="actions" style="margin-top:22px"><button class="btn" id="start">INICIAR PARTIDA</button></div>`:`<div class="waiting"><span class="dot"></span>Aguardando o anfitrião...</div>`}</section></div></div>`}
-async function refresh(){const s=appState.get();try{const room=await API.getRoom({roomCode:s.session.roomCode,playerId:s.session.playerId});appState.set({room});if(room.status==='QUESTION')router.navigate('game');else if(room.status==='FINISHED')router.navigate('results');}catch(e){toast('Conexão perdida ou sala encerrada.','error');clearInterval(poll)}}
-export function bindLobby(){const s=appState.get();document.querySelector('#copy')?.addEventListener('click',async()=>{await navigator.clipboard?.writeText(s.room.roomCode);toast('Código copiado!','success')});document.querySelector('#share')?.addEventListener('click',async()=>{const text=`Entre na minha sala GeoBattle: ${s.room.roomCode}`;if(navigator.share)await navigator.share({title:'GeoBattle',text});else{await navigator.clipboard?.writeText(text);toast('Mensagem de convite copiada!','success')}});document.querySelector('#start')?.addEventListener('click',async()=>{try{await API.startGame({roomCode:s.session.roomCode,hostId:s.session.playerId});router.navigate('game')}catch(e){toast(e.message,'error')}});document.querySelectorAll('[data-remove]').forEach(b=>b.onclick=async()=>{try{await API.removePlayer({roomCode:s.session.roomCode,hostId:s.session.playerId,playerId:b.dataset.remove});await refresh();location.hash='#lobby'}catch(e){toast(e.message,'error')}});clearInterval(poll);poll=setInterval(refresh,1800)}
+/**
+ * lobby.js — TELA 5: LOBBY (jogador comum aguardando o anfitrião)
+ */
+import { navigate } from '../core/router.js';
+import { RoomSync } from '../api/syncService.js';
+import { setState } from '../core/state.js';
+import { API } from '../api/api.js';
+import { clearSession } from '../core/storage.js';
+import { toast } from '../ui/toast.js';
+
+let sync = null;
+
+export const lobbyPage = {
+  render(root, params) {
+    const { room, session, reconnect } = params;
+
+    root.innerHTML = `
+      <div class="screen screen--lobby">
+        <header class="form-header">
+          <button class="icon-btn" id="btnLeave" aria-label="Sair da sala">←</button>
+          <h1>Lobby</h1>
+        </header>
+
+        <div class="lobby-code">
+          <span class="lobby-code__label">Sala</span>
+          <span class="lobby-code__value">${room.roomCode}</span>
+        </div>
+
+        <div class="lobby-wait">
+          <div class="wait-spinner" aria-hidden="true"></div>
+          <p class="wait-text">Aguardando o anfitrião iniciar a partida...</p>
+        </div>
+
+        <section class="players-card">
+          <div class="players-card__header">
+            <h2>Jogadores</h2>
+            <span class="player-count" id="playerCount">${room.players.length}</span>
+          </div>
+          <ul class="player-list" id="playerList"></ul>
+        </section>
+      </div>
+    `;
+
+    renderPlayers(root, room, session);
+
+    root.querySelector('#btnLeave').onclick = () => {
+      stopSync();
+      clearSession();
+      navigate('home');
+    };
+
+    sync = new RoomSync(session, (updated) => {
+      setState({ room: updated });
+      const meStillHere = updated.players.some((p) => p.playerId === session.playerId);
+      if (!meStillHere) {
+        stopSync();
+        clearSession();
+        toast('Você foi removido da sala pelo anfitrião.', 'error');
+        navigate('home');
+        return;
+      }
+      renderPlayers(root, updated, session);
+      if (updated.status === 'QUESTION') {
+        stopSync();
+        navigate('game', { session, isHost: false });
+      }
+      if (updated.status === 'FINISHED') {
+        stopSync();
+        navigate('ranking', { session });
+      }
+    }, () => {});
+    sync.start();
+
+    if (reconnect) toast('Reconectado com sucesso!', 'success');
+  },
+  destroy() { stopSync(); },
+};
+
+function stopSync() {
+  if (sync) { sync.stop(); sync = null; }
+}
+
+function renderPlayers(root, room, session) {
+  const list = root.querySelector('#playerList');
+  const count = root.querySelector('#playerCount');
+  if (!list) return;
+  count.textContent = room.players.length;
+  list.innerHTML = room.players.map((p, i) => `
+    <li class="player-row ${p.playerId === session.playerId ? 'player-row--me' : ''}">
+      <span class="player-row__index">${i + 1}.</span>
+      <span class="player-row__name">${escapeHtml(p.name)} ${p.isHost ? '👑' : ''} ${p.isBot ? '<span class="bot-badge">BOT</span>' : ''}</span>
+    </li>`).join('');
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}

@@ -1,1 +1,30 @@
-@media(max-width:800px){.hero{grid-template-columns:1fr;min-height:auto;padding:35px 0}.hero-visual{min-height:330px}.two,.three{grid-template-columns:1fr}.answers{grid-template-columns:1fr}.podium{gap:7px}.podium-card{padding:13px}.place-1{min-height:190px}.place-2{min-height:160px}.place-3{min-height:140px}.game-head{align-items:flex-start}.question{margin:20px 0}.card.pad{padding:20px}}@media(max-width:480px){.shell{width:min(var(--max),calc(100% - 20px))}.btn{width:100%}.actions{display:grid}.room-code{font-size:2.8rem}.globe{width:270px}}
+/* Mobile-first: os estilos base já são pensados para telas pequenas.
+   Aqui ampliamos e ajustamos grades para telas maiores. */
+
+@media (max-width: 380px) {
+  .hero-title { font-size: 36px; }
+  .globe-scene { width: 180px; height: 180px; }
+  .code-display { font-size: 36px; }
+  .mode-grid { grid-template-columns: 1fr; }
+  .category-grid { grid-template-columns: 1fr; }
+  .answer-grid { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 720px) {
+  .screen { padding-left: var(--space-6); padding-right: var(--space-6); }
+  .form-card { padding: var(--space-6); }
+  .answer-btn { min-height: 100px; }
+}
+
+@media (min-width: 900px) {
+  .screen { max-width: 780px; }
+}
+
+@media (hover: none) {
+  .answer-btn:hover:not(:disabled) { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}

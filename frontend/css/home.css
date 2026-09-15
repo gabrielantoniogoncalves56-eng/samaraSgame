@@ -1,1 +1,58 @@
-.hero{min-height:70vh;display:grid;align-items:center;grid-template-columns:1.1fr .9fr;gap:40px}.hero-visual{min-height:430px;position:relative;display:grid;place-items:center}.globe{width:min(390px,78vw);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 35% 28%,#7dd3fc,transparent 2%,#164b57 3%,#0e3540 65%,#09232a);border:1px solid rgba(125,211,252,.3);box-shadow:0 0 70px rgba(94,234,212,.12),inset -30px -20px 70px rgba(0,0,0,.35);position:relative;overflow:hidden}.globe:before,.globe:after{content:"";position:absolute;inset:15% -5%;border:1px solid rgba(125,211,252,.22);border-radius:50%;transform:rotate(20deg)}.globe:after{inset:-5% 22%;transform:rotate(-18deg)}.pin{position:absolute;font-size:2rem;filter:drop-shadow(0 5px 12px #000)}.p1{top:22%;left:26%}.p2{top:48%;right:20%}.p3{bottom:20%;left:40%}.feature-row{display:flex;flex-wrap:wrap;gap:10px;margin:25px 0}.feature{padding:10px 13px;border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,.025);color:var(--muted)}.home-buttons{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
+.screen--home { padding-top: var(--space-4); background: var(--grad-hero); min-height: 100vh; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; }
+.brand { font-weight: 900; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.brand span { background: var(--grad-primary); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.topbar__actions { display: flex; gap: 8px; }
+
+.home-hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: var(--space-6); }
+
+/* ---------- Globo 3D (CSS puro) ---------- */
+.globe-scene {
+  position: relative; width: 220px; height: 220px; margin-bottom: var(--space-4);
+  perspective: 900px;
+}
+.globe-glow {
+  position: absolute; inset: -30px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(34,211,238,0.35), transparent 70%);
+  filter: blur(6px); z-index: 0;
+}
+.globe {
+  position: relative; width: 100%; height: 100%; border-radius: 50%;
+  transform-style: preserve-3d;
+  animation: globeSpin 16s linear infinite;
+  z-index: 1;
+}
+@keyframes globeSpin { from { transform: rotateY(0deg) rotateX(8deg); } to { transform: rotateY(360deg) rotateX(8deg); } }
+
+.globe__core {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #5eead4 0%, #0e7490 45%, #0b1530 100%);
+  box-shadow: inset -20px -20px 50px rgba(0,0,0,0.5), 0 0 50px rgba(34,211,238,0.35);
+}
+.globe__ring {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 1px solid rgba(148, 226, 255, 0.35);
+  transform-style: preserve-3d;
+}
+.globe__ring--lat { border-color: rgba(148, 226, 255, 0.28); }
+.globe__ring--lon { border-color: rgba(250, 204, 21, 0.22); }
+
+.globe__pin { position: absolute; font-size: 18px; filter: drop-shadow(0 0 6px rgba(255,255,255,0.6)); transform-style: preserve-3d; }
+.globe__pin--1 { top: 30%; left: 68%; transform: translateZ(60px); }
+.globe__pin--2 { top: 60%; left: 20%; transform: translateZ(50px) rotate(-8deg); }
+.globe__pin--3 { top: 20%; left: 35%; transform: translateZ(55px) rotate(12deg); }
+
+.hero-title {
+  font-size: 46px; font-weight: 900; margin: 0 0 4px;
+  background: linear-gradient(135deg, #67e8f9, #a78bfa 60%, #fb923c);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  letter-spacing: -0.02em;
+}
+.hero-subtitle { color: var(--text-1); margin: 0 0 var(--space-6); font-size: 15px; }
+
+.home-actions { display: flex; flex-direction: column; gap: var(--space-3); width: 100%; max-width: 340px; }
+.home-links { display: flex; align-items: center; gap: var(--space-4); margin-top: var(--space-5); flex-wrap: wrap; justify-content: center; }
+.mode-pill { font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); padding: 5px 12px; border-radius: var(--radius-full); color: var(--text-1); }
+
+.home-footer { margin-top: auto; text-align: center; padding-top: var(--space-7); color: var(--text-2); font-size: 12px; }

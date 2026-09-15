@@ -1,9 +1,232 @@
-import {API} from '../api/api.js';import {router} from '../core/router.js';import {appState} from '../core/state.js';import {toast} from '../ui/toast.js';import {createTimer} from '../game/timer.js';import {gameEngine} from '../game/gameEngine.js';
-let timer=null,poll=null,answered=false;
-export function gamePage(){return `<div class="shell page"><header class="topbar"><div class="brand">GEO<span>BATTLE</span></div><div class="timer" id="timer">--</div></header><div class="game-head"><div><div class="eyebrow" id="counter">CARREGANDO...</div><div class="progress"><div id="progress" style="width:0"></div></div></div><div class="host-badge">${appState.get().session.isHost?'👑 Host':''}</div></div><main id="game-area" class="card pad">Carregando pergunta...</main></div>`}
-function renderQuestion(data){const q=data.question;document.querySelector('#counter').textContent=gameEngine.formatQuestionNumber(data.index,data.total);document.querySelector('#progress').style.width=`${((data.index)/data.total)*100}%`;document.querySelector('#game-area').innerHTML=`<div class="question-meta"><span class="chip active">${q.category}</span><span class="chip">${q.difficulty}</span></div><h1 class="question">${q.question}</h1><div class="answers">${q.alternatives.map((a,i)=>`<button class="answer" data-answer="${i}"><strong>${String.fromCharCode(65+i)}.</strong> ${a}</button>`).join('')}</div><div id="result-panel"></div>`;document.querySelectorAll('[data-answer]').forEach(b=>b.onclick=()=>submit(Number(b.dataset.answer),data))}
-async function submit(answer,data){if(answered)return;answered=true;document.querySelectorAll('.answer').forEach(b=>b.disabled=true);const start=data.startedAt;try{const result=await API.submitAnswer({roomCode:appState.get().session.roomCode,playerId:appState.get().session.playerId,questionId:data.question.id,answer});toast('Resposta registrada!','success');showResult(await API.getQuestionResult({roomCode:appState.get().session.roomCode,playerId:appState.get().session.playerId}),result.record)}catch(e){toast(e.message,'error');if(e.code==='TIME_EXPIRED')showResult(await API.getQuestionResult({roomCode:appState.get().session.roomCode,playerId:appState.get().session.playerId}),null)} }
-function showResult(result,own){const panel=document.querySelector('#result-panel');const s=appState.get();const mode=s.settings?.mode||s.room?.settings?.mode;const training=mode==='training';panel.innerHTML=`<div class="result-panel explanation"><strong>${own?.correct?'Resposta registrada — você acertou!':own?'Resposta registrada — não foi dessa vez.':'Tempo esgotado.'}</strong><p>Resposta correta: <b>${String.fromCharCode(65+result.correctAnswer)}</b>. ${result.explanation}</p><p>${result.correctCount} de ${result.answeredCount} respostas registradas acertaram.</p><h3>Ranking parcial</h3><div class="list">${result.ranking.slice(0,5).map(x=>`<div class="list-item"><span>${x.position}º — ${x.name}</span><b>${x.score}</b></div>`).join('')}</div>${s.session.isHost?`<button class="btn" id="next" style="margin-top:18px">${result.ranking.length?'PRÓXIMA':'CONTINUAR'}</button>`:'<div class="waiting">Aguardando o anfitrião...</div>'}${training?'<p class="muted">Modo treino: neste modo o feedback é imediato.</p>':''}</div>`;document.querySelector('#next')?.addEventListener('click',next)}
-async function next(){const s=appState.get();try{const r=await API.nextQuestion({roomCode:s.session.roomCode,hostId:s.session.playerId});appState.set({room:r});if(r.status==='FINISHED')router.navigate('results');else{answered=false;load()}}catch(e){toast(e.message,'error')}}
-async function load(){const s=appState.get();try{const data=await API.getQuestion({roomCode:s.session.roomCode,playerId:s.session.playerId});if(!data){router.navigate('lobby');return}answered=false;renderQuestion(data);clearInterval(poll);timer?.stop();timer=createTimer(data.timeLimit,{onTick:n=>document.querySelector('#timer').textContent=n,onEnd:()=>{if(!answered){answered=true;toast('Tempo esgotado.','error');API.getQuestionResult({roomCode:s.session.roomCode,playerId:s.session.playerId}).then(r=>showResult(r,null)).catch(()=>{})}}});poll=setInterval(async()=>{try{const r=await API.getRoom({roomCode:s.session.roomCode,playerId:s.session.playerId});if(r.status==='FINISHED')router.navigate('results')}catch{}},1800)}catch(e){toast(e.message,'error')}}
-export function bindGame(){load()}
+/**
+ * game.js — TELA 6 (Jogo) + TELA 7 (Resultado da pergunta)
+ * Funciona igual para host e jogadores comuns; o host ganha o botão
+ * extra "Próxima pergunta" / "Encerrar" no card de resultado.
+ */
+import { navigate } from '../core/router.js';
+import { API } from '../api/api.js';
+import { apiErrorToast, toast } from '../ui/toast.js';
+import { sfx } from '../ui/sound.js';
+import { CountdownTimer } from '../game/timer.js';
+import { RoomSync } from '../api/syncService.js';
+import { setState, getState } from '../core/state.js';
+import { medal, letterFor, waitForResult } from '../game/gameEngine.js';
+import { flashFeedback, pulse } from '../ui/animations.js';
+import { CATEGORY_ICONS } from '../data/constants.js';
+
+let sync = null;
+let timer = null;
+let currentQuestionId = null;
+let answered = false;
+let screenRoot = null;
+
+export const gamePage = {
+  render(root, params) {
+    const { session, isHost } = params;
+    screenRoot = root;
+    root.innerHTML = `<div class="screen screen--game" id="gameRoot"></div>`;
+    loadQuestion(root, session, isHost);
+
+    sync = new RoomSync(session, (room) => {
+      setState({ room });
+      // Se a sala avançou de pergunta ou terminou, o loop de resultado cuida disso.
+      if (room.status === 'FINISHED' && getState().screen === 'game') {
+        stopAll();
+        navigate('ranking', { session });
+      }
+    }, () => {});
+    sync.start();
+  },
+  destroy() { stopAll(); },
+};
+
+function stopAll() {
+  if (sync) { sync.stop(); sync = null; }
+  if (timer) { timer.stop(); timer = null; }
+}
+
+async function loadQuestion(root, session, isHost) {
+  answered = false;
+  const gameRoot = root.querySelector('#gameRoot') || root;
+  try {
+    const data = await API.getQuestion({ roomCode: session.roomCode, playerId: session.playerId });
+    if (!data) {
+      // sala pode já ter finalizado ou mudado de status; deixa o polling reagir
+      return;
+    }
+    currentQuestionId = data.question.id;
+    sfx.questionStart();
+    renderQuestion(gameRoot, session, isHost, data);
+  } catch (err) {
+    if (err.code === 'PLAYER_NOT_FOUND') { navigate('home'); return; }
+    apiErrorToast(err);
+  }
+}
+
+function renderQuestion(root, session, isHost, data) {
+  const { question, index, total, timeLimit, startedAt } = data;
+  const elapsedAlready = Date.now() - new Date(startedAt).getTime();
+  const icon = CATEGORY_ICONS[question.category] || '🌐';
+
+  root.innerHTML = `
+    <header class="game-header">
+      <span class="game-progress">Pergunta ${index + 1}/${total}</span>
+      <span class="game-category">${icon} ${question.category}</span>
+    </header>
+
+    <div class="timer-ring-wrap">
+      <svg class="timer-ring" viewBox="0 0 100 100">
+        <circle class="timer-ring__bg" cx="50" cy="50" r="44"></circle>
+        <circle class="timer-ring__fg" id="timerCircle" cx="50" cy="50" r="44"></circle>
+      </svg>
+      <span class="timer-ring__value" id="timerValue">${Math.ceil(timeLimit)}</span>
+    </div>
+
+    <h2 class="question-text" id="questionText">${escapeHtml(question.question)}</h2>
+
+    <div class="answer-grid" id="answerGrid">
+      ${question.alternatives.map((alt, i) => `
+        <button class="answer-btn answer-btn--${letterFor(i).toLowerCase()}" data-index="${i}">
+          <span class="answer-btn__letter">${letterFor(i)}</span>
+          <span class="answer-btn__text">${escapeHtml(alt)}</span>
+        </button>`).join('')}
+    </div>
+
+    <p class="answer-status" id="answerStatus" aria-live="polite"></p>
+  `;
+
+  const circle = root.querySelector('#timerCircle');
+  const CIRC = 2 * Math.PI * 44;
+  circle.style.strokeDasharray = `${CIRC}`;
+
+  const buttons = Array.from(root.querySelectorAll('.answer-btn'));
+  buttons.forEach((btn) => {
+    btn.onclick = () => handleAnswer(root, session, isHost, question, Number(btn.dataset.index), timeLimit * 1000);
+  });
+
+  timer = new CountdownTimer(timeLimit * 1000, (remaining, ratio) => {
+    const el = root.querySelector('#timerValue');
+    if (el) el.textContent = Math.ceil(remaining / 1000);
+    circle.style.strokeDashoffset = `${CIRC * (1 - ratio)}`;
+    circle.classList.toggle('timer-ring__fg--danger', ratio < 0.25);
+    if (Math.ceil(remaining / 1000) <= 5 && remaining > 0) sfx.tick();
+  }, () => {
+    if (!answered) autoTimeout(root, session, isHost, question);
+  });
+  timer.start(elapsedAlready);
+}
+
+async function handleAnswer(root, session, isHost, question, index, timeLimitMs) {
+  if (answered) return;
+  answered = true;
+  timer && timer.stop();
+
+  const buttons = Array.from(root.querySelectorAll('.answer-btn'));
+  buttons.forEach((b) => { b.disabled = true; });
+  buttons[index].classList.add('answer-btn--selected');
+  sfx.click();
+  root.querySelector('#answerStatus').textContent = 'Resposta registrada. Aguardando resultado...';
+
+  try {
+    await API.submitAnswer({ roomCode: session.roomCode, playerId: session.playerId, questionId: question.id, answer: index });
+    const result = await waitForResult(() => API.getQuestionResult({ roomCode: session.roomCode, playerId: session.playerId }));
+    showResult(root, session, isHost, question, result, index);
+  } catch (err) {
+    if (err.code === 'ALREADY_ANSWERED' || err.code === 'TIME_EXPIRED') {
+      try {
+        const result = await waitForResult(() => API.getQuestionResult({ roomCode: session.roomCode, playerId: session.playerId }));
+        showResult(root, session, isHost, question, result, index);
+        return;
+      } catch (e) { /* segue para o erro genérico abaixo */ }
+    }
+    apiErrorToast(err);
+  }
+}
+
+async function autoTimeout(root, session, isHost, question) {
+  if (answered) return;
+  answered = true;
+  const buttons = Array.from(root.querySelectorAll('.answer-btn'));
+  buttons.forEach((b) => { b.disabled = true; });
+  root.querySelector('#answerStatus').textContent = 'Tempo esgotado!';
+  try {
+    const result = await waitForResult(() => API.getQuestionResult({ roomCode: session.roomCode, playerId: session.playerId }));
+    showResult(root, session, isHost, question, result, null);
+  } catch (err) {
+    apiErrorToast(err);
+  }
+}
+
+function showResult(root, session, isHost, question, result, chosenIndex) {
+  const buttons = Array.from(root.querySelectorAll('.answer-btn'));
+  buttons.forEach((btn, i) => {
+    btn.classList.remove('answer-btn--selected');
+    if (i === result.correctAnswer) btn.classList.add('answer-btn--correct');
+    else if (i === chosenIndex) btn.classList.add('answer-btn--wrong');
+  });
+
+  if (result.ownResult) {
+    flashFeedback(root, result.ownResult.correct ? 'correct' : 'wrong');
+    sfx[result.ownResult.correct ? 'correct' : 'wrong']();
+  }
+
+  const podium = result.ranking.slice(0, 3);
+  const podiumHtml = podium.map((p) => `
+    <li class="podium-row">${medal(p.position)} <span>${escapeHtml(p.name)}</span> <strong>${p.score.toLocaleString('pt-BR')}</strong></li>
+  `).join('');
+
+  const panel = document.createElement('div');
+  panel.className = 'result-panel';
+  panel.innerHTML = `
+    <div class="result-panel__inner">
+      <p class="result-headline ${result.ownResult?.correct ? 'result-headline--ok' : 'result-headline--bad'}">
+        ${result.ownResult ? (result.ownResult.correct ? `✅ Você acertou! +${result.ownResult.points} pts` : '❌ Você errou') : '⏱️ Tempo esgotado'}
+      </p>
+      <p class="result-explanation">${escapeHtml(question.explanation || '')}</p>
+      <p class="result-meta">${result.correctCount}/${result.answeredCount} jogadores acertaram</p>
+      <ol class="podium-list">${podiumHtml}</ol>
+      <div class="result-actions" id="resultActions"></div>
+    </div>
+  `;
+  root.appendChild(panel);
+  requestAnimationFrame(() => panel.classList.add('result-panel--show'));
+  pulse(panel);
+  sfx.ranking();
+
+  const actions = panel.querySelector('#resultActions');
+  if (isHost) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary btn-lg btn-block';
+    btn.textContent = 'Próxima ➜';
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        stopAllTimersOnly();
+        const room = await API.nextQuestion({ roomCode: session.roomCode, hostId: session.playerId });
+        setState({ room });
+        if (room.status === 'FINISHED') {
+          stopAll();
+          navigate('ranking', { session });
+        } else {
+          loadQuestion(screenRoot, session, isHost);
+        }
+      } catch (err) {
+        apiErrorToast(err);
+        btn.disabled = false;
+      }
+    };
+    actions.appendChild(btn);
+  } else {
+    actions.innerHTML = `<p class="waiting-host">Aguardando o anfitrião avançar para a próxima pergunta...</p>`;
+  }
+}
+
+function stopAllTimersOnly() {
+  if (timer) { timer.stop(); timer = null; }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}

@@ -1,1 +1,47 @@
-:root{--bg:#071316;--surface:#0d2024;--surface-2:#123038;--surface-3:#183d46;--text:#f4fbfa;--muted:#9db5b8;--accent:#5eead4;--accent-2:#7dd3fc;--warning:#fbbf24;--danger:#fb7185;--success:#4ade80;--border:rgba(255,255,255,.1);--shadow:0 18px 50px rgba(0,0,0,.28);--radius:20px;--radius-sm:12px;--max:1180px}
+:root {
+  /* Paleta — tema "mapa noturno" (navy + cyan + coral), identidade própria */
+  --bg-0: #060b18;
+  --bg-1: #0b1530;
+  --bg-2: #101c3d;
+  --surface: #131f42;
+  --surface-2: #182750;
+  --border: rgba(120, 170, 255, 0.16);
+
+  --primary: #22d3ee;
+  --primary-dark: #0891b2;
+  --accent: #f97316;
+  --accent-2: #facc15;
+  --success: #34d399;
+  --danger: #f87171;
+  --violet: #a78bfa;
+
+  --text-0: #f2f6ff;
+  --text-1: #b9c6e8;
+  --text-2: #7f8db3;
+
+  --grad-hero: radial-gradient(circle at 50% 20%, #163264 0%, #060b18 70%);
+  --grad-primary: linear-gradient(135deg, #22d3ee 0%, #6366f1 100%);
+  --grad-accent: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+  --grad-card: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-full: 999px;
+
+  --shadow-glow: 0 0 40px rgba(34, 211, 238, 0.25);
+  --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.35);
+
+  --font-main: 'Segoe UI', system-ui, -apple-system, 'Roboto', sans-serif;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --transition-fast: 150ms ease;
+  --transition-med: 280ms cubic-bezier(.2,.8,.2,1);
+}

@@ -1,1 +1,31 @@
-.podium{display:grid;grid-template-columns:repeat(3,1fr);align-items:end;gap:12px;margin:30px 0}.podium-card{padding:20px;text-align:center;border:1px solid var(--border);border-radius:18px;background:#0b2227}.place-1{min-height:230px}.place-2{min-height:190px}.place-3{min-height:160px}.rank-number{font-family:'Space Grotesk';font-size:2.5rem;color:var(--accent)}.table{width:100%;border-collapse:collapse}.table th,.table td{padding:13px;border-bottom:1px solid var(--border);text-align:left}.winner{font-family:'Space Grotesk';font-size:2.5rem;color:var(--accent)}
+.screen--ranking { align-items: center; text-align: center; padding-top: var(--space-6); }
+.ranking-title { font-size: 26px; margin: 0 0 var(--space-6); }
+
+.podium { display: flex; align-items: flex-end; gap: var(--space-3); width: 100%; justify-content: center; margin-bottom: var(--space-5); }
+.podium-slot { flex: 1; max-width: 150px; display: flex; flex-direction: column; align-items: center; }
+.podium-slot__medal { font-size: 30px; }
+.podium-slot__name { font-weight: 800; font-size: 14px; margin-top: 4px; }
+.podium-slot__score { color: var(--text-1); font-size: 13px; margin-bottom: 8px; }
+.podium-slot__bar { width: 100%; border-radius: 10px 10px 0 0; background: var(--grad-primary); }
+.podium-slot--1 .podium-slot__bar { height: 120px; background: linear-gradient(135deg, #facc15, #f59e0b); }
+.podium-slot--2 .podium-slot__bar { height: 90px; }
+.podium-slot--3 .podium-slot__bar { height: 66px; background: linear-gradient(135deg, #fb923c, #ea580c); }
+.podium-slot--empty .podium-slot__bar { height: 60px; background: var(--surface-2); }
+
+.rest-list { list-style: none; counter-reset: none; margin: 0 0 var(--space-5); padding: 0; width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.rest-row {
+  display: flex; justify-content: space-between; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 14px; font-size: 14px;
+}
+
+.stats-card {
+  width: 100%; background: var(--grad-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: var(--space-5); margin-bottom: var(--space-5);
+}
+.stats-card h2 { margin: 0 0 var(--space-4); font-size: 16px; text-align: left; }
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
+.stat { display: flex; flex-direction: column; }
+.stat__value { font-size: 20px; font-weight: 900; color: var(--primary); }
+.stat__label { font-size: 11px; color: var(--text-2); }
+
+.ranking-actions { display: flex; flex-direction: column; gap: var(--space-3); width: 100%; max-width: 340px; }

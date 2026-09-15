@@ -1,1 +1,14 @@
-.host-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.host-badge{padding:7px 10px;border-radius:999px;background:rgba(94,234,212,.1);color:var(--accent);font-weight:700}.stat{padding:20px}.stat strong{display:block;font-family:'Space Grotesk';font-size:2rem;margin-top:6px}.host-controls{display:flex;gap:10px;flex-wrap:wrap}
+.screen--host { gap: var(--space-4); }
+
+.code-card {
+  background: var(--grad-card); border: 1.5px dashed var(--primary);
+  border-radius: var(--radius-lg); padding: var(--space-6) var(--space-5);
+  text-align: center; box-shadow: var(--shadow-glow);
+}
+.code-label { color: var(--text-1); font-size: 12px; letter-spacing: 0.14em; font-weight: 700; margin: 0 0 8px; }
+.code-display {
+  font-size: 48px; font-weight: 900; letter-spacing: 0.14em;
+  background: linear-gradient(135deg, #67e8f9, #a78bfa);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.code-actions { display: flex; gap: var(--space-3); justify-content: center; margin-top: var(--space-4); flex-wrap: wrap; }

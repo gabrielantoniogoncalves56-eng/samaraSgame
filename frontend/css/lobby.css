@@ -1,1 +1,18 @@
-.room-code{font-family:'Space Grotesk';font-size:clamp(3rem,10vw,6rem);letter-spacing:.16em;color:var(--accent);font-weight:700;text-align:center}.code-box{padding:30px}.player-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}.player{padding:15px;border:1px solid var(--border);border-radius:14px;background:#0a1b1f;display:flex;justify-content:space-between;gap:10px}.waiting{display:flex;align-items:center;gap:10px;justify-content:center;padding:18px;color:var(--muted)}.dot{width:9px;height:9px;background:var(--accent);border-radius:50%;animation:pulse 1.3s infinite}@keyframes pulse{50%{opacity:.25}}
+.screen--lobby { align-items: center; text-align: center; }
+.screen--lobby .players-card { width: 100%; text-align: left; }
+
+.lobby-code {
+  display: flex; flex-direction: column; align-items: center; margin: var(--space-4) 0;
+}
+.lobby-code__label { color: var(--text-2); font-size: 12px; letter-spacing: 0.1em; }
+.lobby-code__value { font-size: 30px; font-weight: 900; letter-spacing: 0.1em; color: var(--primary); }
+
+.lobby-wait { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); margin: var(--space-5) 0; }
+.wait-text { color: var(--text-1); font-size: 14px; }
+
+.wait-spinner {
+  width: 54px; height: 54px; border-radius: 50%;
+  border: 3px solid var(--border); border-top-color: var(--primary);
+  animation: spinLoader 1s linear infinite;
+}
+@keyframes spinLoader { to { transform: rotate(360deg); } }
