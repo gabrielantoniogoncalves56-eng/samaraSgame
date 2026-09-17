@@ -53,45 +53,6 @@
 .home-actions { display: flex; flex-direction: column; gap: var(--space-3); width: 100%; max-width: 340px; }
 .home-links { margin-top: var(--space-5); }
 
-
-/* ---------- Criadores ---------- */
-.home-links {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-
-.creators-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 4px;
-}
-
-.creator-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 14px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-1);
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.creator-number {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  border-radius: 50%;
-  background: rgba(34, 211, 238, 0.12);
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 800;
-}
+.creators-list { display: grid; gap: 8px; }
+.creator-row { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); font-weight: 700; }
+.home-links { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }

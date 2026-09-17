@@ -4,12 +4,12 @@
  * com bots) e backendApi (Google Apps Script, multiplayer real) sem
  * que nenhuma tela precise saber qual está ativa.
  */
-import { CONFIG, setApiUrl } from '../config.js';
+import { CONFIG, setOnlineMode } from '../config.js';
 import { mockApi } from './mockApi.js';
 import { backendApi } from './backendApi.js';
 
 function impl() {
-  return CONFIG.API_BASE_URL ? backendApi : mockApi;
+  return CONFIG.ONLINE_MODE ? backendApi : mockApi;
 }
 function wrap(name) {
   return (...args) => impl()[name](...args);
@@ -28,23 +28,21 @@ export const API = {
 };
 
 export function isOnlineMode() {
-  return !!CONFIG.API_BASE_URL;
+  return !!CONFIG.ONLINE_MODE;
 }
 
-/** Testa e ativa a conexão com um backend real. Nunca deixa o app travado. */
-export async function tryConnectBackend(url) {
-  const trimmed = String(url || '').trim();
-  const previous = CONFIG.API_BASE_URL;
-  if (!trimmed) {
-    setApiUrl('');
+/** Alterna entre backend real (Supabase) e modo demo local. Nunca deixa o app travado. */
+export async function tryConnectBackend(wantOnline) {
+  if (!wantOnline) {
+    setOnlineMode(false);
     return { ok: true, mode: 'demo', message: 'Modo demo (local, com bots) ativado.' };
   }
-  setApiUrl(trimmed);
   try {
     await backendApi.healthCheck();
+    setOnlineMode(true);
     return { ok: true, mode: 'online', message: 'Conectado ao backend — o jogo agora é 100% online!' };
   } catch (e) {
-    setApiUrl(previous);
-    return { ok: false, mode: previous ? 'online' : 'demo', message: 'Não foi possível conectar. Verifique a URL e o deploy do Web App.' };
+    setOnlineMode(false);
+    return { ok: false, mode: 'demo', message: 'Não foi possível conectar ao backend no momento. Modo demo ativado.' };
   }
 }

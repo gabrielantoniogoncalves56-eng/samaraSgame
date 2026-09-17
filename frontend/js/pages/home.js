@@ -8,7 +8,6 @@ import { renderHero3D, bindHeroParallax } from '../ui/heroArt.js';
 import { openModal, closeModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { GAME_META } from '../data/gameData.js';
-import { CONFIG } from '../config.js';
 import { tryConnectBackend, isOnlineMode, API } from '../api/api.js';
 import { loadSession, clearSession } from '../core/storage.js';
 
@@ -44,8 +43,6 @@ export const homePage = {
             <button class="link-btn" id="btnCreators">${icon('users', { size: 14 })} Criadores</button>
           </div>
         </main>
-
-        <footer class="page-footer">${GAME_META.credit}</footer>
       </div>
     `;
 
@@ -64,56 +61,39 @@ export const homePage = {
 
 
 function openCreators() {
-  const creators = [
-    'Bernardo Duarte',
-    'Danielly Tereza',
-    'Gabriel Antônio',
-    'Bernardo Alves',
-    'Cauan Vitor',
-    'Vitor Morato',
-  ];
-
+  const creators = ['Bernardo Duarte', 'Danielly Tereza', 'Gabriel Antônio', 'Bernardo Alves', 'Cauan Vitor', 'Vitor Morato'];
   openModal({
     title: `${icon('users', { size: 18 })} Criadores`,
-    bodyHtml: `
-      <div class="creators-list">
-        ${creators.map((name, index) => `
-          <div class="creator-item">
-            <span class="creator-number">${index + 1}</span>
-            <span>${name}</span>
-          </div>
-        `).join('')}
-      </div>
-    `,
-    actions: [
-      { label: 'Fechar', className: 'btn-primary', onClick: () => {} },
-    ],
+    bodyHtml: `<div class="creators-list">${creators.map((name) => `<div class="creator-row">${escapeHtml(name)}</div>`).join('')}</div>`,
+    actions: [{ label: 'Fechar', className: 'btn-secondary' }],
   });
 }
 
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
 function openSettings() {
-  const url = CONFIG.API_BASE_URL || '';
   openModal({
     title: `${icon('settings', { size: 18 })} Configurações`,
     bodyHtml: `
-      <p>Para jogar <strong>100% online</strong> com outras pessoas em dispositivos diferentes, cole
-      abaixo a URL do backend (Web App do Google Apps Script) publicado — essa é a
-      <strong>única variável de integração</strong> do projeto. Sem ela, o jogo roda em modo demo
-      local, com bots, apenas para teste.</p>
-      <label class="field-label" for="apiUrlInput">URL do backend</label>
-      <input id="apiUrlInput" class="text-input" placeholder="https://script.google.com/macros/s/.../exec" value="${url}" />
+      <p>O jogo usa um backend real (Supabase) para multiplayer <strong>100% online</strong>,
+      com outras pessoas em dispositivos diferentes. Você também pode jogar em
+      <strong>modo demo</strong> local, sozinho contra bots, sem depender de conexão.</p>
+      <p>Modo atual: <strong>${isOnlineMode() ? 'Online (Supabase)' : 'Demo (local)'}</strong></p>
     `,
     actions: [
       { label: 'Usar modo demo', className: 'btn-secondary', close: false, onClick: async () => {
-        await tryConnectBackend('');
+        await tryConnectBackend(false);
         toast('Modo demo (local) ativado.', 'success');
         closeModal(); navigate('home');
       } },
-      { label: 'Conectar', className: 'btn-primary', close: false, onClick: async () => {
-        const val = document.getElementById('apiUrlInput').value;
-        const result = await tryConnectBackend(val);
+      { label: 'Usar backend online', className: 'btn-primary', close: false, onClick: async () => {
+        const result = await tryConnectBackend(true);
         toast(result.message, result.ok ? 'success' : 'error');
-        if (result.ok) { closeModal(); navigate('home'); }
+        closeModal(); navigate('home');
       } },
     ],
   });

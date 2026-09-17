@@ -1,11 +1,14 @@
 /**
  * backendApi.js
- * Cliente do backend real (Google Apps Script Web App). Implementa
- * exatamente o mesmo contrato do mockApi.js — veja api.js para a troca
- * automática entre os dois.
+ * Cliente do backend real — Supabase (Postgres + RPCs via PostgREST).
+ * Implementa exatamente o mesmo contrato do mockApi.js (veja api.js
+ * para a troca automática entre os dois), só que agora cada método
+ * mapeia direto para uma função `rotas_*` no banco (SECURITY DEFINER,
+ * com locking via FOR UPDATE nas escritas concorrentes).
  *
- * GET para leituras, POST com Content-Type "text/plain" para escritas
- * (evita o preflight CORS que o Apps Script não trata bem).
+ * Toda a lógica de validação e regras do jogo vive nas RPCs — este
+ * arquivo só traduz nomes de parâmetros (camelCase -> p_snake_case) e
+ * decodifica erros no formato "CODIGO|mensagem" que as funções lançam.
  */
 import { CONFIG } from '../config.js';
 
@@ -13,56 +16,53 @@ class ApiError extends Error {
   constructor(code, message) { super(message); this.code = code; }
 }
 
-function baseUrl() {
-  const url = CONFIG.API_BASE_URL;
-  if (!url) throw new ApiError('SETUP_REQUIRED', 'Nenhum backend configurado — cole a URL na tela Configurações.');
-  return url;
-}
-
-async function get(action, params = {}) {
-  const qs = new URLSearchParams({ action, ...flatten(params) });
-  const res = await fetch(`${baseUrl()}?${qs.toString()}`, { method: 'GET' });
-  return parse(res);
-}
-async function post(action, params = {}) {
-  const res = await fetch(baseUrl(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, ...params }),
-  });
-  return parse(res);
-}
-function flatten(obj) {
-  const out = {};
-  Object.entries(obj).forEach(([k, v]) => { if (v !== undefined && v !== null && typeof v !== 'object') out[k] = String(v); });
-  return out;
-}
-async function parse(res) {
-  let json;
-  try { json = await res.json(); } catch (e) { throw new ApiError('SERVER_ERROR', 'Resposta inválida do servidor.'); }
-  if (!json.success) {
-    const err = json.error || {};
-    throw new ApiError(err.code || 'SERVER_ERROR', err.message || 'Erro no servidor.');
+async function rpc(fn, params = {}) {
+  const url = `${CONFIG.SUPABASE_URL}/rest/v1/rpc/${fn}`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: CONFIG.SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify(params),
+    });
+  } catch (e) {
+    throw new ApiError('SERVER_ERROR', 'Não foi possível conectar ao backend.');
   }
-  return json.data;
+
+  let json = null;
+  try { json = await res.json(); } catch (e) { /* corpo vazio, ok para 2xx sem retorno */ }
+
+  if (!res.ok) {
+    // PostgREST devolve o erro da RPC em `message`, no formato "CODIGO|mensagem"
+    // (é como _rotas_error() no banco levanta a exceção).
+    const raw = String(json?.message || '');
+    const sep = raw.indexOf('|');
+    if (sep > -1) throw new ApiError(raw.slice(0, sep), raw.slice(sep + 1));
+    throw new ApiError('SERVER_ERROR', json?.message || 'Erro no servidor.');
+  }
+  return json;
 }
 
 export const backendApi = {
-  createRoom: (p) => post('createRoom', p),
-  joinRoom: (p) => post('joinRoom', p),
-  getRoom: (p) => get('getRoom', p),
-  startGame: (p) => post('startGame', p),
-  drawTile: (p) => post('drawTile', p),
-  placeTile: (p) => post('placeTile', p),
-  drawChallenge: (p) => post('drawChallenge', p),
-  answerChallenge: (p) => post('answerChallenge', p),
-  removePlayer: (p) => post('removePlayer', p),
+  createRoom: ({ hostName, settings }) => rpc('rotas_create_room', { p_host_name: hostName, p_settings: settings || {} }),
+  joinRoom: ({ roomCode, name }) => rpc('rotas_join_room', { p_room_code: roomCode, p_name: name }),
+  getRoom: ({ roomCode, playerId }) => rpc('rotas_get_room', { p_room_code: roomCode, p_player_id: playerId ?? null }),
+  startGame: ({ roomCode, hostId }) => rpc('rotas_start_game', { p_room_code: roomCode, p_host_id: hostId }),
+  drawTile: ({ roomCode, playerId }) => rpc('rotas_draw_tile', { p_room_code: roomCode, p_player_id: playerId }),
+  placeTile: ({ roomCode, playerId, x, y }) => rpc('rotas_place_tile', { p_room_code: roomCode, p_player_id: playerId, p_x: Number(x), p_y: Number(y) }),
+  passTurn: ({ roomCode }) => rpc('rotas_pass_turn', { p_room_code: roomCode }),
+  drawChallenge: ({ roomCode, playerId }) => rpc('rotas_draw_challenge', { p_room_code: roomCode, p_player_id: playerId }),
+  answerChallenge: ({ roomCode, playerId, questionId, chosenIndex }) =>
+    rpc('rotas_answer_challenge', { p_room_code: roomCode, p_player_id: playerId, p_question_id: Number(questionId), p_chosen_index: Number(chosenIndex) }),
+  removePlayer: ({ roomCode, hostId, playerId }) => rpc('rotas_remove_player', { p_room_code: roomCode, p_host_id: hostId, p_player_id: playerId }),
 
   async healthCheck() {
-    const res = await fetch(`${baseUrl()}?action=healthCheck`);
-    if (!res.ok) throw new ApiError('SERVER_ERROR', 'Backend indisponível.');
-    const json = await res.json();
-    if (!json.success) throw new ApiError(json.error?.code || 'SERVER_ERROR', json.error?.message || 'Backend indisponível.');
+    const data = await rpc('rotas_health_check', {});
+    if (!data || !data.ok) throw new ApiError('SERVER_ERROR', 'Backend indisponível.');
     return { ok: true };
   },
 };

@@ -109,7 +109,7 @@ export const GAME_META = {
   subtitle: 'Imigração, Emigração, Êxodo Rural e os grandes movimentos migratórios do Brasil e do Mundo',
   players: '2 a 4 jogadores (ou grupos)',
   duration: '20 a 30 minutos',
-  credit: '<a href="https://github.com/gabrielantoniogoncalves56-eng/samaraSgame" target="_blank">Link do Repositorio</a>'
+  credit: 'Adaptação pedagógica livre da mecânica de alocação de tiles de Cascadia (Randy Flynn / Flatout Games), sem fins comerciais e sem uso de arte ou textos originais.',
 };
 
 export const PEDAGOGICAL_MAP = [

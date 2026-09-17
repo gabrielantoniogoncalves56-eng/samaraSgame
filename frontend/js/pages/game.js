@@ -139,10 +139,15 @@ function renderBoard(canvas, player) {
     const terr = TERRITORIES.find((x) => x.id === t.territory);
     const prof = PROFILES.find((x) => x.id === t.profile);
     cells.push(`
-      <div class="board-tile" style="grid-column:${t.x - minX + 1}; grid-row:${t.y - minY + 1}; --tc:${terr.color}">
+      <button class="board-tile board-tile--interactive" type="button"
+        data-tile-info="true" data-territory="${terr.id}" data-profile="${prof.id}"
+        aria-label="Ver informações de ${escapeHtml(terr.name)} e ${escapeHtml(prof.name)}"
+        style="grid-column:${t.x - minX + 1}; grid-row:${t.y - minY + 1}; --tc:${terr.color}">
         <span class="board-tile__terr">${icon(terr.icon, { size: 15, strokeWidth: 1.6 })}</span>
         <span class="board-tile__prof" style="--pc:${prof.color}">${icon(prof.icon, { size: 12, strokeWidth: 1.8 })}</span>
-      </div>`);
+        <span class="tile-info-badge" aria-hidden="true">i</span>
+        <span class="tile-hover-card" aria-hidden="true">${escapeHtml(terr.name)}<br><strong>${escapeHtml(prof.name)}</strong><br><small>Toque para ver pontuação</small></span>
+      </button>`);
   });
   frontier.forEach((k) => {
     const [x, y] = k.split(',').map(Number);
@@ -150,6 +155,12 @@ function renderBoard(canvas, player) {
   });
 
   canvas.innerHTML = cells.join('');
+  canvas.querySelectorAll('[data-tile-info]').forEach((tile) => {
+    tile.onclick = (event) => {
+      event.stopPropagation();
+      openTileInfo(tile.dataset.territory, tile.dataset.profile);
+    };
+  });
 
   if (canPlace) {
     canvas.querySelectorAll('.board-cell--empty').forEach((cell) => {
@@ -192,12 +203,18 @@ function renderActions(container) {
     container.innerHTML = `
       <div class="drawn-tile" style="--tc:${terr.color}">
         <span class="drawn-tile__label">Tile sorteado — toque numa célula destacada para posicionar</span>
-        <div class="drawn-tile__preview">
-          <span class="drawn-tile__terr">${icon(terr.icon, { size: 22 })} ${terr.name}</span>
-          <span class="drawn-tile__prof" style="--pc:${prof.color}">${icon(prof.icon, { size: 18 })} ${prof.name}</span>
-        </div>
+        <button class="tile-info-button" type="button" data-tile-info="true" data-territory="${terr.id}" data-profile="${prof.id}">
+          <div class="drawn-tile__preview">
+            <span class="drawn-tile__terr">${icon(terr.icon, { size: 22 })} ${terr.name}</span>
+            <span class="drawn-tile__prof" style="--pc:${prof.color}">${icon(prof.icon, { size: 18 })} ${prof.name}</span>
+          </div>
+          <span class="tile-info-button__hint">ⓘ Ver carta e pontuação</span>
+        </button>
       </div>
     `;
+    container.querySelector('[data-tile-info]')?.addEventListener('click', () => {
+      openTileInfo(terr.id, prof.id);
+    });
     return;
   }
 
@@ -231,6 +248,31 @@ async function placeTile(x, y) {
     const canvas = screenRoot.querySelector('#boardCanvas');
     if (canvas) pulse(canvas);
   } catch (err) { toast(err.message || 'Não foi possível posicionar o tile.', 'error'); }
+}
+
+function openTileInfo(territoryId, profileId) {
+  const terr = TERRITORIES.find((t) => t.id === territoryId);
+  const prof = PROFILES.find((p) => p.id === profileId);
+  if (!terr || !prof) return;
+  openModal({
+    title: `${icon(prof.icon, { size: 18 })} ${escapeHtml(prof.name)}`,
+    bodyHtml: `
+      <div class="tile-info-modal" style="--tc:${terr.color}; --pc:${prof.color}">
+        <div class="tile-info-modal__section">
+          <span class="tile-info-modal__label">Território</span>
+          <strong>${icon(terr.icon, { size: 16 })} ${escapeHtml(terr.name)}</strong>
+          <p>${escapeHtml(terr.desc)}</p>
+        </div>
+        <div class="tile-info-modal__section">
+          <span class="tile-info-modal__label">Perfil migratório</span>
+          <strong>${icon(prof.icon, { size: 16 })} ${escapeHtml(prof.name)}</strong>
+          <p>${escapeHtml(prof.concept)}</p>
+          <p>${escapeHtml(prof.scoring.help)}</p>
+          <table class="scoring-table">${prof.scoring.table.map((row) => `<tr><td>${escapeHtml(row.k)}</td><td>${row.v} pts</td></tr>`).join('')}</table>
+        </div>
+      </div>`,
+    actions: [{ label: 'Fechar', className: 'btn-secondary' }],
+  });
 }
 
 // ---------------- Desafio ----------------

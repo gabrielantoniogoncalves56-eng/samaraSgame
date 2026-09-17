@@ -110,8 +110,6 @@ export const rulesPage = {
             </tbody>
           </table>
         </section>
-
-        <p class="page-footer">${GAME_META.credit}</p>
       </div>
     `;
 
