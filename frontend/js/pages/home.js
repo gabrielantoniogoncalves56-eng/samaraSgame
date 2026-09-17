@@ -1,125 +1,117 @@
 /**
- * home.js — TELA 1: HOME
+ * home.js — tela inicial: hero 3D de rotas entre destinos + navegação
+ * para Criar Sala, Entrar em Sala, Regras e Configurações.
  */
 import { navigate } from '../core/router.js';
-import { renderGlobe, startParticleField } from '../ui/globe.js';
+import { icon } from '../ui/icons.js';
+import { renderHero3D, bindHeroParallax } from '../ui/heroArt.js';
 import { openModal, closeModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
-import { sfx, toggleSound } from '../ui/sound.js';
-import { getState } from '../core/state.js';
-import { tryConnectBackend, currentMode } from '../api/api.js';
+import { GAME_META } from '../data/gameData.js';
 import { CONFIG } from '../config.js';
+import { tryConnectBackend, isOnlineMode, API } from '../api/api.js';
 import { loadSession, clearSession } from '../core/storage.js';
-import { API } from '../api/api.js';
-import { showLoading, hideLoading } from '../ui/loading.js';
 
-let stopParticles = null;
+let unbindParallax = null;
 
 export const homePage = {
   render(root) {
-    const soundOn = getState().soundOn;
     root.innerHTML = `
-      <canvas class="bg-particles"></canvas>
       <div class="screen screen--home">
         <header class="topbar">
-          <div class="brand">🌎 <span>GeoBattle</span></div>
+          <div class="brand">${icon('route', { size: 22 })} <span>ROTAS</span></div>
           <div class="topbar__actions">
-            <button class="icon-btn" id="btnSound" aria-label="Som">${soundOn ? '🔊' : '🔇'}</button>
-            <button class="icon-btn" id="btnSettings" aria-label="Configurações">⚙️</button>
+            <button class="icon-btn" id="btnSettings" aria-label="Configurações">${icon('settings', { size: 18 })}</button>
           </div>
         </header>
 
         <main class="home-hero">
-          ${renderGlobe()}
-          <h1 class="hero-title">GeoBattle</h1>
-          <p class="hero-subtitle">Teste seus conhecimentos. Desafie seus amigos.</p>
+          ${renderHero3D()}
+          <h1 class="hero-title">${GAME_META.title}</h1>
+          <p class="hero-subtitle">${GAME_META.subtitle}</p>
+          <span class="mode-pill mode-pill--status" id="modePill">
+            ${icon(isOnlineMode() ? 'wifi' : 'users', { size: 14 })}
+            ${isOnlineMode() ? 'Backend conectado — multiplayer real' : 'Modo demo local (jogue sozinho contra bots)'}
+          </span>
 
           <div class="home-actions">
-            <button class="btn btn-primary btn-lg" id="btnCreate">🗺️ Criar Sala</button>
-            <button class="btn btn-outline btn-lg" id="btnJoin">🚩 Entrar em uma Sala</button>
+            <button class="btn btn-primary btn-lg btn-block" id="btnCreate">${icon('play', { size: 18 })} Criar Sala</button>
+            <button class="btn btn-outline btn-lg btn-block" id="btnJoin">${icon('users', { size: 18 })} Entrar em uma Sala</button>
           </div>
 
           <div class="home-links">
-            <button class="link-btn" id="btnHow">Como jogar</button>
-            <button class="link-btn" id="btnAbout">Sobre o jogo</button>
-            <span class="mode-pill" id="modePill">${currentMode() === 'backend' ? '🟢 Backend conectado' : '🟡 Modo demo (offline)'}</span>
+            <button class="link-btn" id="btnRules">${icon('book', { size: 14 })} Regras do jogo</button>
+            <button class="link-btn" id="btnCreators">${icon('users', { size: 14 })} Criadores</button>
           </div>
         </main>
 
-        <footer class="home-footer">GeoBattle · v${CONFIG.VERSION} · Feito para geógrafos competitivos 🌋</footer>
+        <footer class="page-footer">${GAME_META.credit}</footer>
       </div>
     `;
 
-    const canvas = root.querySelector('.bg-particles');
-    stopParticles = startParticleField(canvas);
+    unbindParallax = bindHeroParallax(root);
 
-    root.querySelector('#btnCreate').onclick = () => { sfx.click(); navigate('createRoom'); };
-    root.querySelector('#btnJoin').onclick = () => { sfx.click(); navigate('joinRoom'); };
-    root.querySelector('#btnSound').onclick = (e) => {
-      const on = toggleSound();
-      e.currentTarget.textContent = on ? '🔊' : '🔇';
-    };
+    root.querySelector('#btnCreate').onclick = () => navigate('createRoom');
+    root.querySelector('#btnJoin').onclick = () => navigate('joinRoom');
+    root.querySelector('#btnRules').onclick = () => navigate('rules');
+    root.querySelector('#btnCreators').onclick = () => openCreators();
     root.querySelector('#btnSettings').onclick = () => openSettings();
-    root.querySelector('#btnHow').onclick = () => openHowToPlay();
-    root.querySelector('#btnAbout').onclick = () => openAbout();
 
     maybeOfferReconnect();
   },
-  destroy() {
-    if (stopParticles) stopParticles();
-  },
+  destroy() { if (unbindParallax) unbindParallax(); },
 };
 
-function openHowToPlay() {
+
+function openCreators() {
+  const creators = [
+    'Bernardo Duarte',
+    'Danielly Tereza',
+    'Gabriel Antônio',
+    'Bernardo Alves',
+    'Cauan Vitor',
+    'Vitor Morato',
+  ];
+
   openModal({
-    title: '🎮 Como jogar',
+    title: `${icon('users', { size: 18 })} Criadores`,
     bodyHtml: `
-      <ol class="howto-list">
-        <li>Um jogador cria uma sala e escolhe as configurações da partida.</li>
-        <li>O sistema gera um código de 6 caracteres para compartilhar.</li>
-        <li>Os demais jogadores entram digitando o código e o nome.</li>
-        <li>O anfitrião inicia a partida quando todos estiverem prontos.</li>
-        <li>Todos respondem às mesmas perguntas de Geografia — quanto mais rápido e mais acertos em sequência, mais pontos!</li>
-        <li>Ao final, o ranking completo e as estatísticas são exibidos.</li>
-      </ol>`,
-    actions: [{ label: 'Entendi', className: 'btn-primary' }],
-  });
-}
-function openAbout() {
-  openModal({
-    title: '🌋 Sobre o GeoBattle',
-    bodyHtml: `<p>GeoBattle é um jogo multiplayer de perguntas e respostas sobre Geografia,
-      com identidade visual e arquitetura próprias. Funciona 100% offline em <strong>modo demo</strong>,
-      e pode se conectar a um backend real em Google Apps Script para partidas com várias pessoas em dispositivos diferentes.</p>`,
-    actions: [{ label: 'Fechar', className: 'btn-secondary' }],
+      <div class="creators-list">
+        ${creators.map((name, index) => `
+          <div class="creator-item">
+            <span class="creator-number">${index + 1}</span>
+            <span>${name}</span>
+          </div>
+        `).join('')}
+      </div>
+    `,
+    actions: [
+      { label: 'Fechar', className: 'btn-primary', onClick: () => {} },
+    ],
   });
 }
 
 function openSettings() {
-  const mode = currentMode();
   const url = CONFIG.API_BASE_URL || '';
   openModal({
-    title: '⚙️ Configurações',
+    title: `${icon('settings', { size: 18 })} Configurações`,
     bodyHtml: `
-      <p class="settings-desc">O GeoBattle funciona sozinho, em <strong>modo demo</strong>, sem nenhum servidor.
-      Para jogar com outras pessoas em dispositivos diferentes, cole abaixo a URL do seu
-      backend (Web App do Google Apps Script) publicado. A conexão é testada e ativada automaticamente.</p>
-      <label class="field-label" for="apiUrlInput">URL do backend (Web App)</label>
+      <p>Para jogar <strong>100% online</strong> com outras pessoas em dispositivos diferentes, cole
+      abaixo a URL do backend (Web App do Google Apps Script) publicado — essa é a
+      <strong>única variável de integração</strong> do projeto. Sem ela, o jogo roda em modo demo
+      local, com bots, apenas para teste.</p>
+      <label class="field-label" for="apiUrlInput">URL do backend</label>
       <input id="apiUrlInput" class="text-input" placeholder="https://script.google.com/macros/s/.../exec" value="${url}" />
-      <p class="settings-status">Status atual: <strong>${mode === 'backend' ? 'Conectado ao backend' : 'Modo demo (offline)'}</strong></p>
     `,
     actions: [
       { label: 'Usar modo demo', className: 'btn-secondary', close: false, onClick: async () => {
         await tryConnectBackend('');
-        toast('Modo demo ativado.', 'success');
-        closeModal();
-        navigate('home');
+        toast('Modo demo (local) ativado.', 'success');
+        closeModal(); navigate('home');
       } },
       { label: 'Conectar', className: 'btn-primary', close: false, onClick: async () => {
         const val = document.getElementById('apiUrlInput').value;
-        showLoading('Testando conexão...');
         const result = await tryConnectBackend(val);
-        hideLoading();
         toast(result.message, result.ok ? 'success' : 'error');
         if (result.ok) { closeModal(); navigate('home'); }
       } },
@@ -134,17 +126,16 @@ async function maybeOfferReconnect() {
     const room = await API.getRoom({ roomCode: session.roomCode, playerId: session.playerId });
     if (!room || room.status === 'FINISHED') { clearSession(); return; }
     openModal({
-      title: '🔄 Reconectar',
+      title: `${icon('refresh', { size: 18 })} Reconectar`,
       bodyHtml: `<p>Encontramos uma sala em andamento: <strong>${session.roomCode}</strong> (${session.playerName}).
         Deseja voltar para o jogo?</p>`,
       actions: [
         { label: 'Ignorar', className: 'btn-secondary', onClick: () => clearSession() },
         { label: 'Reconectar', className: 'btn-primary', onClick: () => {
-          navigate('lobby', { session, reconnect: true });
+          if (room.status === 'WAITING') navigate('lobby', { session, reconnect: true });
+          else navigate('game', { session, reconnect: true });
         } },
       ],
     });
-  } catch (e) {
-    clearSession();
-  }
+  } catch (e) { clearSession(); }
 }

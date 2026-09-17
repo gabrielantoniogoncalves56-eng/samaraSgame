@@ -1,0 +1,21 @@
+.screen--rules .panel { text-align: left; }
+.rule-text { font-size: 14px; color: var(--text-1); line-height: 1.6; margin: 0 0 var(--space-2); }
+.rule-text strong { color: var(--text-0); }
+.rule-highlight { color: var(--text-0); background: var(--surface-2); padding: 10px 12px; border-radius: var(--radius-sm); border-left: 3px solid var(--primary); }
+.rule-subtitle { font-size: 13px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; margin: var(--space-3) 0 var(--space-2); }
+.rule-list { margin: 0; padding-left: 20px; color: var(--text-1); font-size: 14px; line-height: 1.7; }
+.rule-list li::marker { color: var(--primary); font-weight: 700; }
+
+.profile-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.profile-card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--c, var(--primary)); border-radius: var(--radius-md); padding: var(--space-4); }
+.profile-card__head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.profile-card__icon { color: var(--c, var(--primary)); flex-shrink: 0; }
+.profile-card__name { font-weight: 800; font-size: 15px; }
+.profile-card__concept { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.03em; }
+.profile-card__flavor { font-size: 13px; color: var(--text-1); font-style: italic; margin: 0 0 8px; line-height: 1.4; }
+.profile-card__help { font-size: 12.5px; color: var(--text-1); margin: 0 0 4px; }
+
+.pedagogic-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pedagogic-table th { text-align: left; color: var(--text-2); font-size: 11px; text-transform: uppercase; padding: 6px 4px; border-bottom: 1px solid var(--border); }
+.pedagogic-table td { padding: 8px 4px; border-bottom: 1px solid var(--border); color: var(--text-1); }
+.pedagogic-table td:first-child { color: var(--text-0); font-weight: 600; width: 44%; }

@@ -1,14 +1,8 @@
 /**
- * timer.js
- * Contador regressivo reutilizável, baseado em requestAnimationFrame
- * para uma barra/anel de progresso suave.
+ * timer.js — contador regressivo suave (requestAnimationFrame), usado
+ * para o tempo de turno.
  */
 export class CountdownTimer {
-  /**
-   * @param {number} durationMs
-   * @param {(remainingMs:number, ratio:number)=>void} onTick
-   * @param {()=>void} onEnd
-   */
   constructor(durationMs, onTick, onEnd) {
     this.duration = durationMs;
     this.onTick = onTick;
@@ -27,11 +21,7 @@ export class CountdownTimer {
       const remaining = Math.max(0, this.duration - elapsed);
       const ratio = this.duration ? remaining / this.duration : 0;
       this.onTick(remaining, ratio);
-      if (remaining <= 0) {
-        this.ended = true;
-        this.onEnd();
-        return;
-      }
+      if (remaining <= 0) { this.ended = true; this.onEnd(); return; }
       this.raf = requestAnimationFrame(step);
     };
     this.raf = requestAnimationFrame(step);

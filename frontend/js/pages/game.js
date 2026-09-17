@@ -1,38 +1,48 @@
 /**
- * game.js — TELA 6 (Jogo) + TELA 7 (Resultado da pergunta)
- * Funciona igual para host e jogadores comuns; o host ganha o botão
- * extra "Próxima pergunta" / "Encerrar" no card de resultado.
+ * game.js
+ * A tela principal do ROTAS online: tabuleiro interativo por jogador,
+ * sorteio de tiles (substitui o saco físico), Cartas Desafio e placar
+ * ao vivo calculado automaticamente a cada atualização da sala.
  */
 import { navigate } from '../core/router.js';
 import { API } from '../api/api.js';
-import { apiErrorToast, toast } from '../ui/toast.js';
+import { toast } from '../ui/toast.js';
+import { icon } from '../ui/icons.js';
 import { sfx } from '../ui/sound.js';
 import { CountdownTimer } from '../game/timer.js';
 import { RoomSync } from '../api/syncService.js';
-import { setState, getState } from '../core/state.js';
-import { medal, letterFor, waitForResult } from '../game/gameEngine.js';
-import { flashFeedback, pulse } from '../ui/animations.js';
-import { CATEGORY_ICONS } from '../data/constants.js';
+import { rankPlayers } from '../game/scoring.js';
+import { TERRITORIES, PROFILES } from '../data/gameData.js';
+import { pulse } from '../ui/animations.js';
+import { openModal, closeModal } from '../ui/modal.js';
+import { clearSession } from '../core/storage.js';
 
 let sync = null;
 let timer = null;
-let currentQuestionId = null;
-let answered = false;
 let screenRoot = null;
+let session = null;
+let room = null;
+let viewingPlayerId = null;
+let autoActing = false;
 
 export const gamePage = {
   render(root, params) {
-    const { session, isHost } = params;
+    session = params.session;
     screenRoot = root;
-    root.innerHTML = `<div class="screen screen--game" id="gameRoot"></div>`;
-    loadQuestion(root, session, isHost);
+    viewingPlayerId = session.playerId;
+    root.innerHTML = `<div class="screen screen--game" id="gameRoot"><p class="loading-text">Carregando sala...</p></div>`;
 
-    sync = new RoomSync(session, (room) => {
-      setState({ room });
-      // Se a sala avançou de pergunta ou terminou, o loop de resultado cuida disso.
-      if (room.status === 'FINISHED' && getState().screen === 'game') {
-        stopAll();
-        navigate('ranking', { session });
+    sync = new RoomSync(session, (updated) => {
+      const prevTurn = room ? room.currentTurnPlayerId : null;
+      const prevStatus = room ? room.status : null;
+      room = updated;
+      const meStillHere = room.players.some((p) => p.playerId === session.playerId);
+      if (!meStillHere) { stopAll(); clearSession(); toast('Você foi removido da sala.', 'error'); navigate('home'); return; }
+      if (room.status === 'FINISHED') { stopAll(); navigate('ranking', { session }); return; }
+      renderAll();
+      if (room.currentTurnPlayerId !== prevTurn || prevStatus !== room.status) {
+        if (room.currentTurnPlayerId === session.playerId) sfx.turnStart();
+        restartTurnTimer();
       }
     }, () => {});
     sync.start();
@@ -45,184 +55,262 @@ function stopAll() {
   if (timer) { timer.stop(); timer = null; }
 }
 
-async function loadQuestion(root, session, isHost) {
-  answered = false;
-  const gameRoot = root.querySelector('#gameRoot') || root;
-  try {
-    const data = await API.getQuestion({ roomCode: session.roomCode, playerId: session.playerId });
-    if (!data) {
-      // sala pode já ter finalizado ou mudado de status; deixa o polling reagir
-      return;
-    }
-    currentQuestionId = data.question.id;
-    sfx.questionStart();
-    renderQuestion(gameRoot, session, isHost, data);
-  } catch (err) {
-    if (err.code === 'PLAYER_NOT_FOUND') { navigate('home'); return; }
-    apiErrorToast(err);
-  }
-}
+function me() { return room.players.find((p) => p.playerId === session.playerId); }
+function viewedPlayer() { return room.players.find((p) => p.playerId === viewingPlayerId) || me(); }
+function isMyTurn() { return room.currentTurnPlayerId === session.playerId; }
 
-function renderQuestion(root, session, isHost, data) {
-  const { question, index, total, timeLimit, startedAt } = data;
-  const elapsedAlready = Date.now() - new Date(startedAt).getTime();
-  const icon = CATEGORY_ICONS[question.category] || '🌐';
+function renderAll() {
+  const gameRoot = screenRoot.querySelector('#gameRoot');
+  const turnPlayer = room.players.find((p) => p.playerId === room.currentTurnPlayerId);
+  const vp = viewedPlayer();
+  const leaderboard = rankPlayers(room.players);
 
-  root.innerHTML = `
-    <header class="game-header">
-      <span class="game-progress">Pergunta ${index + 1}/${total}</span>
-      <span class="game-category">${icon} ${question.category}</span>
+  gameRoot.innerHTML = `
+    <header class="game-topbar">
+      <span class="room-code-pill">${icon('grid', { size: 13 })} ${room.roomCode}</span>
+      <span class="turn-indicator ${isMyTurn() ? 'turn-indicator--mine' : ''}">
+        ${isMyTurn() ? 'Sua vez!' : `Vez de ${escapeHtml(turnPlayer ? turnPlayer.name : '...')}`}
+      </span>
+      <div class="turn-timer-ring-wrap">
+        <svg class="timer-ring" viewBox="0 0 100 100">
+          <circle class="timer-ring__bg" cx="50" cy="50" r="44"></circle>
+          <circle class="timer-ring__fg" id="timerCircle" cx="50" cy="50" r="44"></circle>
+        </svg>
+        <span class="timer-ring__value" id="timerValue">--</span>
+      </div>
     </header>
 
-    <div class="timer-ring-wrap">
-      <svg class="timer-ring" viewBox="0 0 100 100">
-        <circle class="timer-ring__bg" cx="50" cy="50" r="44"></circle>
-        <circle class="timer-ring__fg" id="timerCircle" cx="50" cy="50" r="44"></circle>
-      </svg>
-      <span class="timer-ring__value" id="timerValue">${Math.ceil(timeLimit)}</span>
-    </div>
-
-    <h2 class="question-text" id="questionText">${escapeHtml(question.question)}</h2>
-
-    <div class="answer-grid" id="answerGrid">
-      ${question.alternatives.map((alt, i) => `
-        <button class="answer-btn answer-btn--${letterFor(i).toLowerCase()}" data-index="${i}">
-          <span class="answer-btn__letter">${letterFor(i)}</span>
-          <span class="answer-btn__text">${escapeHtml(alt)}</span>
+    <div class="player-tabs" id="playerTabs">
+      ${room.players.map((p) => `
+        <button class="player-tab ${p.playerId === viewingPlayerId ? 'player-tab--active' : ''} ${p.playerId === room.currentTurnPlayerId ? 'player-tab--turn' : ''}" data-view="${p.playerId}">
+          ${p.playerId === session.playerId ? 'Meu mapa' : escapeHtml(p.name)}
         </button>`).join('')}
     </div>
 
-    <p class="answer-status" id="answerStatus" aria-live="polite"></p>
-  `;
-
-  const circle = root.querySelector('#timerCircle');
-  const CIRC = 2 * Math.PI * 44;
-  circle.style.strokeDasharray = `${CIRC}`;
-
-  const buttons = Array.from(root.querySelectorAll('.answer-btn'));
-  buttons.forEach((btn) => {
-    btn.onclick = () => handleAnswer(root, session, isHost, question, Number(btn.dataset.index), timeLimit * 1000);
-  });
-
-  timer = new CountdownTimer(timeLimit * 1000, (remaining, ratio) => {
-    const el = root.querySelector('#timerValue');
-    if (el) el.textContent = Math.ceil(remaining / 1000);
-    circle.style.strokeDashoffset = `${CIRC * (1 - ratio)}`;
-    circle.classList.toggle('timer-ring__fg--danger', ratio < 0.25);
-    if (Math.ceil(remaining / 1000) <= 5 && remaining > 0) sfx.tick();
-  }, () => {
-    if (!answered) autoTimeout(root, session, isHost, question);
-  });
-  timer.start(elapsedAlready);
-}
-
-async function handleAnswer(root, session, isHost, question, index, timeLimitMs) {
-  if (answered) return;
-  answered = true;
-  timer && timer.stop();
-
-  const buttons = Array.from(root.querySelectorAll('.answer-btn'));
-  buttons.forEach((b) => { b.disabled = true; });
-  buttons[index].classList.add('answer-btn--selected');
-  sfx.click();
-  root.querySelector('#answerStatus').textContent = 'Resposta registrada. Aguardando resultado...';
-
-  try {
-    await API.submitAnswer({ roomCode: session.roomCode, playerId: session.playerId, questionId: question.id, answer: index });
-    const result = await waitForResult(() => API.getQuestionResult({ roomCode: session.roomCode, playerId: session.playerId }));
-    showResult(root, session, isHost, question, result, index);
-  } catch (err) {
-    if (err.code === 'ALREADY_ANSWERED' || err.code === 'TIME_EXPIRED') {
-      try {
-        const result = await waitForResult(() => API.getQuestionResult({ roomCode: session.roomCode, playerId: session.playerId }));
-        showResult(root, session, isHost, question, result, index);
-        return;
-      } catch (e) { /* segue para o erro genérico abaixo */ }
-    }
-    apiErrorToast(err);
-  }
-}
-
-async function autoTimeout(root, session, isHost, question) {
-  if (answered) return;
-  answered = true;
-  const buttons = Array.from(root.querySelectorAll('.answer-btn'));
-  buttons.forEach((b) => { b.disabled = true; });
-  root.querySelector('#answerStatus').textContent = 'Tempo esgotado!';
-  try {
-    const result = await waitForResult(() => API.getQuestionResult({ roomCode: session.roomCode, playerId: session.playerId }));
-    showResult(root, session, isHost, question, result, null);
-  } catch (err) {
-    apiErrorToast(err);
-  }
-}
-
-function showResult(root, session, isHost, question, result, chosenIndex) {
-  const buttons = Array.from(root.querySelectorAll('.answer-btn'));
-  buttons.forEach((btn, i) => {
-    btn.classList.remove('answer-btn--selected');
-    if (i === result.correctAnswer) btn.classList.add('answer-btn--correct');
-    else if (i === chosenIndex) btn.classList.add('answer-btn--wrong');
-  });
-
-  if (result.ownResult) {
-    flashFeedback(root, result.ownResult.correct ? 'correct' : 'wrong');
-    sfx[result.ownResult.correct ? 'correct' : 'wrong']();
-  }
-
-  const podium = result.ranking.slice(0, 3);
-  const podiumHtml = podium.map((p) => `
-    <li class="podium-row">${medal(p.position)} <span>${escapeHtml(p.name)}</span> <strong>${p.score.toLocaleString('pt-BR')}</strong></li>
-  `).join('');
-
-  const panel = document.createElement('div');
-  panel.className = 'result-panel';
-  panel.innerHTML = `
-    <div class="result-panel__inner">
-      <p class="result-headline ${result.ownResult?.correct ? 'result-headline--ok' : 'result-headline--bad'}">
-        ${result.ownResult ? (result.ownResult.correct ? `✅ Você acertou! +${result.ownResult.points} pts` : '❌ Você errou') : '⏱️ Tempo esgotado'}
-      </p>
-      <p class="result-explanation">${escapeHtml(question.explanation || '')}</p>
-      <p class="result-meta">${result.correctCount}/${result.answeredCount} jogadores acertaram</p>
-      <ol class="podium-list">${podiumHtml}</ol>
-      <div class="result-actions" id="resultActions"></div>
+    <div class="board-wrap">
+      <div class="board-canvas" id="boardCanvas"></div>
     </div>
-  `;
-  root.appendChild(panel);
-  requestAnimationFrame(() => panel.classList.add('result-panel--show'));
-  pulse(panel);
-  sfx.ranking();
 
-  const actions = panel.querySelector('#resultActions');
-  if (isHost) {
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-primary btn-lg btn-block';
-    btn.textContent = 'Próxima ➜';
-    btn.onclick = async () => {
-      btn.disabled = true;
-      try {
-        stopAllTimersOnly();
-        const room = await API.nextQuestion({ roomCode: session.roomCode, hostId: session.playerId });
-        setState({ room });
-        if (room.status === 'FINISHED') {
-          stopAll();
-          navigate('ranking', { session });
-        } else {
-          loadQuestion(screenRoot, session, isHost);
-        }
-      } catch (err) {
-        apiErrorToast(err);
-        btn.disabled = false;
-      }
-    };
-    actions.appendChild(btn);
-  } else {
-    actions.innerHTML = `<p class="waiting-host">Aguardando o anfitrião avançar para a próxima pergunta...</p>`;
+    <div class="game-actions" id="gameActions"></div>
+
+    <aside class="panel leaderboard" id="leaderboardPanel">
+      <h2>${icon('trophy', { size: 16 })} Placar ao vivo</h2>
+      <ol class="leaderboard-list">
+        ${leaderboard.map((r, i) => `
+          <li class="leaderboard-row ${r.player.playerId === room.currentTurnPlayerId ? 'leaderboard-row--turn' : ''}">
+            <span class="leaderboard-row__pos">${i + 1}º</span>
+            <span class="leaderboard-row__name">${escapeHtml(r.player.name)}${r.player.isHost ? icon('crown', { size: 12 }) : ''}</span>
+            <span class="leaderboard-row__score">${r.total} pts</span>
+          </li>`).join('')}
+      </ol>
+    </aside>
+  `;
+
+  renderBoard(gameRoot.querySelector('#boardCanvas'), vp);
+  renderActions(gameRoot.querySelector('#gameActions'));
+
+  gameRoot.querySelectorAll('[data-view]').forEach((btn) => {
+    btn.onclick = () => { viewingPlayerId = btn.dataset.view; renderAll(); };
+  });
+}
+
+// ---------------- Tabuleiro ----------------
+function renderBoard(canvas, player) {
+  const tiles = player.tiles || [];
+  if (!tiles.length) { canvas.innerHTML = '<p class="loading-text">Sem tiles ainda.</p>'; return; }
+
+  const own = player.playerId === session.playerId;
+  const canPlace = own && isMyTurn() && !!player.pendingTile;
+  const occupied = new Set(tiles.map((t) => `${t.x},${t.y}`));
+  const frontier = canPlace ? computeFrontier(tiles, occupied) : new Set();
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  const consider = (x, y) => { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); };
+  tiles.forEach((t) => consider(t.x, t.y));
+  frontier.forEach((k) => { const [x, y] = k.split(',').map(Number); consider(x, y); });
+
+  const cols = maxX - minX + 1;
+  const rows = maxY - minY + 1;
+  canvas.style.setProperty('--cols', cols);
+  canvas.style.setProperty('--rows', rows);
+
+  const cells = [];
+  tiles.forEach((t) => {
+    const terr = TERRITORIES.find((x) => x.id === t.territory);
+    const prof = PROFILES.find((x) => x.id === t.profile);
+    cells.push(`
+      <div class="board-tile" style="grid-column:${t.x - minX + 1}; grid-row:${t.y - minY + 1}; --tc:${terr.color}">
+        <span class="board-tile__terr">${icon(terr.icon, { size: 15, strokeWidth: 1.6 })}</span>
+        <span class="board-tile__prof" style="--pc:${prof.color}">${icon(prof.icon, { size: 12, strokeWidth: 1.8 })}</span>
+      </div>`);
+  });
+  frontier.forEach((k) => {
+    const [x, y] = k.split(',').map(Number);
+    cells.push(`<button class="board-cell board-cell--empty" data-x="${x}" data-y="${y}" style="grid-column:${x - minX + 1}; grid-row:${y - minY + 1}" aria-label="Posicionar aqui"></button>`);
+  });
+
+  canvas.innerHTML = cells.join('');
+
+  if (canPlace) {
+    canvas.querySelectorAll('.board-cell--empty').forEach((cell) => {
+      cell.onclick = () => placeTile(Number(cell.dataset.x), Number(cell.dataset.y));
+    });
   }
 }
 
-function stopAllTimersOnly() {
-  if (timer) { timer.stop(); timer = null; }
+function computeFrontier(tiles, occupied) {
+  const out = new Set();
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  tiles.forEach((t) => {
+    dirs.forEach(([dx, dy]) => {
+      const k = `${t.x + dx},${t.y + dy}`;
+      if (!occupied.has(k)) out.add(k);
+    });
+  });
+  return out;
+}
+
+// ---------------- Ações (sortear tile / desafio) ----------------
+function renderActions(container) {
+  const my = me();
+  if (!my) return;
+  const own = viewingPlayerId === session.playerId;
+
+  if (!own) {
+    container.innerHTML = `<p class="rule-text hint-text">Visualizando o mapa de outro jogador (somente leitura).</p>`;
+    return;
+  }
+
+  if (!isMyTurn()) {
+    container.innerHTML = `<p class="rule-text hint-text">Aguarde sua vez para sortear e posicionar um tile.</p>`;
+    return;
+  }
+
+  if (my.pendingTile) {
+    const terr = TERRITORIES.find((t) => t.id === my.pendingTile.territory);
+    const prof = PROFILES.find((p) => p.id === my.pendingTile.profile);
+    container.innerHTML = `
+      <div class="drawn-tile" style="--tc:${terr.color}">
+        <span class="drawn-tile__label">Tile sorteado — toque numa célula destacada para posicionar</span>
+        <div class="drawn-tile__preview">
+          <span class="drawn-tile__terr">${icon(terr.icon, { size: 22 })} ${terr.name}</span>
+          <span class="drawn-tile__prof" style="--pc:${prof.color}">${icon(prof.icon, { size: 18 })} ${prof.name}</span>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <button class="btn btn-primary btn-lg btn-block" id="btnDraw">${icon('dice', { size: 18 })} Sortear Tile</button>
+    <button class="btn btn-outline btn-block" id="btnChallenge" ${my.lastChallengeTurn === room.turnNumber ? 'disabled' : ''}>
+      ${icon('target', { size: 16 })} Sortear Desafio (+3 pts)
+    </button>
+  `;
+  container.querySelector('#btnDraw').onclick = () => drawTile();
+  const chBtn = container.querySelector('#btnChallenge');
+  if (chBtn) chBtn.onclick = () => openChallenge();
+}
+
+async function drawTile() {
+  try {
+    sfx.draw();
+    await API.drawTile({ roomCode: room.roomCode, playerId: session.playerId });
+    const updated = await API.getRoom({ roomCode: room.roomCode, playerId: session.playerId });
+    room = updated;
+    renderAll();
+  } catch (err) { toast(err.message || 'Não foi possível sortear.', 'error'); }
+}
+
+async function placeTile(x, y) {
+  try {
+    const updated = await API.placeTile({ roomCode: room.roomCode, playerId: session.playerId, x, y });
+    room = updated;
+    sfx.place();
+    renderAll();
+    const canvas = screenRoot.querySelector('#boardCanvas');
+    if (canvas) pulse(canvas);
+  } catch (err) { toast(err.message || 'Não foi possível posicionar o tile.', 'error'); }
+}
+
+// ---------------- Desafio ----------------
+async function openChallenge() {
+  try {
+    const q = await API.drawChallenge({ roomCode: room.roomCode, playerId: session.playerId });
+    openModal({
+      title: `${icon('target', { size: 18 })} Carta Desafio`,
+      bodyHtml: `
+        <span class="challenge-cat">${q.category} · ${q.difficulty === 'hard' ? 'Difícil' : 'Médio'}</span>
+        <p class="challenge-q">${escapeHtml(q.question)}</p>
+        <div class="challenge-alts" id="challengeAlts">
+          ${q.alternatives.map((a, i) => `<button class="challenge-option" data-i="${i}">${escapeHtml(a)}</button>`).join('')}
+        </div>
+        <div id="challengeResult"></div>
+      `,
+      actions: [{ label: 'Fechar', className: 'btn-secondary' }],
+    });
+    document.querySelectorAll('#challengeAlts .challenge-option').forEach((btn) => {
+      btn.onclick = async () => {
+        document.querySelectorAll('#challengeAlts .challenge-option').forEach((b) => { b.disabled = true; });
+        try {
+          const res = await API.answerChallenge({ roomCode: room.roomCode, playerId: session.playerId, questionId: q.id, chosenIndex: Number(btn.dataset.i) });
+          document.querySelectorAll('#challengeAlts .challenge-option').forEach((b, i) => {
+            if (i === res.correctAnswer) b.classList.add('challenge-option--correct');
+            else if (Number(btn.dataset.i) === i) b.classList.add('challenge-option--wrong');
+          });
+          sfx[res.correct ? 'correct' : 'wrong']();
+          document.getElementById('challengeResult').innerHTML = `
+            <p class="challenge-verdict">${res.correct ? icon('check', { size: 16 }) + ' Correto! +3 pts' : icon('cross', { size: 16 }) + ' Resposta incorreta'}</p>
+            <p class="challenge-explain">${escapeHtml(res.explanation)}</p>`;
+          const updated = await API.getRoom({ roomCode: room.roomCode, playerId: session.playerId });
+          room = updated;
+          renderAll();
+        } catch (err) { toast(err.message || 'Erro ao responder.', 'error'); }
+      };
+    });
+  } catch (err) { toast(err.message || 'Não foi possível sortear um desafio.', 'error'); }
+}
+
+// ---------------- Timer de turno ----------------
+function restartTurnTimer() {
+  if (timer) timer.stop();
+  if (!room.turnStartedAt || room.status !== 'PLAYING') return;
+  const durationMs = (room.settings.turnTime || 30) * 1000;
+  const elapsed = Date.now() - new Date(room.turnStartedAt).getTime();
+  autoActing = false;
+  timer = new CountdownTimer(durationMs, (remaining, ratio) => {
+    const val = screenRoot.querySelector('#timerValue');
+    const circle = screenRoot.querySelector('#timerCircle');
+    if (val) val.textContent = Math.ceil(remaining / 1000);
+    if (circle) {
+      const CIRC = 2 * Math.PI * 44;
+      circle.style.strokeDasharray = `${CIRC}`;
+      circle.style.strokeDashoffset = `${CIRC * (1 - ratio)}`;
+      circle.classList.toggle('timer-ring__fg--danger', ratio < 0.25);
+    }
+  }, () => { if (isMyTurn()) autoPlay(); });
+  timer.start(Math.max(0, elapsed));
+}
+
+async function autoPlay() {
+  if (autoActing) return;
+  autoActing = true;
+  try {
+    let my = me();
+    if (!my.pendingTile) {
+      await API.drawTile({ roomCode: room.roomCode, playerId: session.playerId });
+      const updated = await API.getRoom({ roomCode: room.roomCode, playerId: session.playerId });
+      room = updated; my = me();
+    }
+    const occupied = new Set(my.tiles.map((t) => `${t.x},${t.y}`));
+    const frontier = [...computeFrontier(my.tiles, occupied)];
+    const choice = frontier[Math.floor(Math.random() * frontier.length)];
+    if (choice) {
+      const [x, y] = choice.split(',').map(Number);
+      await placeTile(x, y);
+      toast('Tempo esgotado — tile posicionado automaticamente.', 'info');
+    }
+  } catch (e) { /* silencioso */ }
 }
 
 function escapeHtml(str) {

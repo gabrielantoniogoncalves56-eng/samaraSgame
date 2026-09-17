@@ -1,7 +1,8 @@
 /**
- * modal.js
- * Modal acessível simples (foco, ESC, overlay).
+ * modal.js — modal acessível simples.
  */
+import { icon } from './icons.js';
+
 let activeModal = null;
 
 export function openModal({ title, bodyHtml, actions = [] }) {
@@ -14,7 +15,7 @@ export function openModal({ title, bodyHtml, actions = [] }) {
   const box = document.createElement('div');
   box.className = 'modal-box';
   box.innerHTML = `
-    <button class="modal-close" aria-label="Fechar">✕</button>
+    <button class="modal-close" aria-label="Fechar">${icon('close', { size: 18 })}</button>
     <h2 class="modal-title">${title}</h2>
     <div class="modal-body">${bodyHtml}</div>
     <div class="modal-actions"></div>

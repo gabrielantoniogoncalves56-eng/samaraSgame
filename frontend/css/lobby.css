@@ -1,18 +1,11 @@
 .screen--lobby { align-items: center; text-align: center; }
-.screen--lobby .players-card { width: 100%; text-align: left; }
+.screen--lobby .panel { width: 100%; text-align: left; }
 
-.lobby-code {
-  display: flex; flex-direction: column; align-items: center; margin: var(--space-4) 0;
-}
+.lobby-code { display: flex; flex-direction: column; align-items: center; margin: var(--space-4) 0; }
 .lobby-code__label { color: var(--text-2); font-size: 12px; letter-spacing: 0.1em; }
-.lobby-code__value { font-size: 30px; font-weight: 900; letter-spacing: 0.1em; color: var(--primary); }
+.lobby-code__value { font-size: 28px; font-weight: 900; letter-spacing: 0.1em; color: var(--primary); }
 
 .lobby-wait { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); margin: var(--space-5) 0; }
 .wait-text { color: var(--text-1); font-size: 14px; }
-
-.wait-spinner {
-  width: 54px; height: 54px; border-radius: 50%;
-  border: 3px solid var(--border); border-top-color: var(--primary);
-  animation: spinLoader 1s linear infinite;
-}
+.wait-spinner { width: 50px; height: 50px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--primary); animation: spinLoader 1s linear infinite; }
 @keyframes spinLoader { to { transform: rotate(360deg); } }

@@ -1,5 +1,5 @@
 :root {
-  /* Paleta — tema "mapa noturno" (navy + cyan + coral), identidade própria */
+  /* Base — mesmo tema "mapa noturno" usado nos demais projetos */
   --bg-0: #060b18;
   --bg-1: #0b1530;
   --bg-2: #101c3d;
@@ -10,18 +10,15 @@
   --primary: #22d3ee;
   --primary-dark: #0891b2;
   --accent: #f97316;
-  --accent-2: #facc15;
   --success: #34d399;
   --danger: #f87171;
-  --violet: #a78bfa;
 
   --text-0: #f2f6ff;
   --text-1: #b9c6e8;
   --text-2: #7f8db3;
 
-  --grad-hero: radial-gradient(circle at 50% 20%, #163264 0%, #060b18 70%);
+  --grad-hero: radial-gradient(circle at 50% 10%, #163264 0%, #060b18 70%);
   --grad-primary: linear-gradient(135deg, #22d3ee 0%, #6366f1 100%);
-  --grad-accent: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
   --grad-card: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
 
   --radius-sm: 10px;
@@ -29,19 +26,28 @@
   --radius-lg: 24px;
   --radius-full: 999px;
 
-  --shadow-glow: 0 0 40px rgba(34, 211, 238, 0.25);
+  --shadow-glow: 0 0 40px rgba(34, 211, 238, 0.2);
   --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.35);
 
   --font-main: 'Segoe UI', system-ui, -apple-system, 'Roboto', sans-serif;
 
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px;
 
   --transition-fast: 150ms ease;
   --transition-med: 280ms cubic-bezier(.2,.8,.2,1);
+
+  /* Territórios (5 tipos — cores fiéis ao material físico do jogo) */
+  --terr-rural: #4ade80;
+  --terr-cidade: #facc15;
+  --terr-periferia: #f87171;
+  --terr-centro: #60a5fa;
+  --terr-fronteira: #cbd5e1;
+
+  /* Perfis migratórios (5 conceitos do tema) */
+  --prof-exodo: #a3e635;
+  --prof-interna: #fb923c;
+  --prof-imigracao: #38bdf8;
+  --prof-emigracao: #c084fc;
+  --prof-refugio: #f472b6;
 }
